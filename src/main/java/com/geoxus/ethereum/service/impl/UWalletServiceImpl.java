@@ -58,43 +58,31 @@ import java.util.Optional;
 @Slf4j
 @ConditionalOnExpression(value = "${eth-enable:true}")
 public class UWalletServiceImpl extends ServiceImpl<UWalletMapper, UWalletEntity> implements UWalletService {
-    @Autowired
-    private EthConfig ethConfig;
-
-    @Autowired
-    private UWalletService uWalletService;
-
-    @Autowired
-    private UBalanceService uBalanceService;
-
-    @Autowired
-    private UUserService uUserService;
-
-    @Autowired
-    private GXRedisUtils redisUtil;
-
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
-
     private final static Object lock = new Object();
-
     @GXFieldCommentAnnotation(zh = "内部转账")
     private static final int TRANSACTION_INNER_TYPE = 1;
-
     @GXFieldCommentAnnotation(zh = "外部转账")
     private static final int TRANSACTION_OUTER_TYPE = 2;
-
     @GXFieldCommentAnnotation(zh = "HTML文件的文件后缀")
     private static final String EXT_HTML = "html";
-
     @GXFieldCommentAnnotation(zh = "PNG文件的文件后缀")
     private static final String EXT_PNG = "png";
-
     @GXFieldCommentAnnotation(zh = "以太坊钱包地址助记词长度")
     private static final int WALLET_NUMBER_OF_WORDS = 24;
-
     @GXFieldCommentAnnotation(zh = "加密以太坊钱包地址助记词密钥的长度")
     private static final int ENCRYPT_WALLET_NUMBER_OF_WORDS_LENGTH = 12;
+    @Autowired
+    private EthConfig ethConfig;
+    @Autowired
+    private UWalletService uWalletService;
+    @Autowired
+    private UBalanceService uBalanceService;
+    @Autowired
+    private UUserService uUserService;
+    @Autowired
+    private GXRedisUtils redisUtil;
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
 
     @Override
     @Transactional
@@ -339,8 +327,8 @@ public class UWalletServiceImpl extends ServiceImpl<UWalletMapper, UWalletEntity
 
     @Override
     public boolean checkAddressType(String address) {
-        final UWalletEntity entity = getOneByCondition(Dict.create().set("address", address));
-        return null != entity;
+        final Dict condition = Dict.create().set("address", address);
+        return null != checkRecordIsExists(UWalletEntity.class, condition);
     }
 
     @Override
