@@ -162,7 +162,9 @@ public class UWalletServiceImpl extends ServiceImpl<UWalletMapper, UWalletEntity
     private boolean processTransferOutUSDT(USDTContract.TransferEventResponse event, UWalletEntity wallet) {
         log.info("进入用户转出处理 >> processTransferOutUSDT : amount={} , tx hash={}", Convert.fromWei(String.valueOf(event.value), Convert.Unit.MWEI), event.log.getTransactionHash());
         final Dict balance = getBlockChainBalance(Dict.create().set("address", wallet.getAddress()).set("user_id", wallet.getUserId()));
-        uBalanceService.updateFieldByCondition(Dict.create().set("user_id", wallet.getUserId()).set("type", UBalanceConstants.AVAILABLE_ETH_TYPE), "balance", balance.getDouble("eth"));
+        Dict condition = Dict.create().set("user_id", wallet.getUserId()).set("type", UBalanceConstants.AVAILABLE_ETH_TYPE);
+        Dict data = Dict.create().set("balance", balance.getDouble("eth"));
+        uBalanceService.updateFieldBySQL(UBalanceEntity.class, data, condition);
         double newBalance = uBalanceService.reduceBalance(wallet.getUserId(), UBalanceConstants.FROZEN_USDT_TYPE, Convert.fromWei(event.value.toString(), Convert.Unit.MWEI).doubleValue(), Dict.create().set("source", "user_mention_usdt").set("remark", "用户提币USDT"));
         return true;
     }
