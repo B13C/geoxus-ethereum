@@ -41,7 +41,7 @@ public class DefaultEthListenerServiceImpl implements EthListenerService {
             }
             final Dict dict = Convert.convert(Dict.class, JSONUtil.parse(tx.log)).set("from", tx.from).set("to", tx.to).set("value", tx.value);
             final String transactionHash = tx.log.getTransactionHash();
-            final String s = redisUtils.get(transactionHash);
+            final String s = GXRedisUtils.get(transactionHash, String.class);
         }, (Throwable error) -> {
             try {
                 log.info("以太坊监听器发生了异常哦....{}", error.toString());

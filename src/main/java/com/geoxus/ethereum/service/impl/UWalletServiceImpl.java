@@ -31,12 +31,14 @@ import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.WalletUtils;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
+import org.web3j.protocol.core.Request;
 import org.web3j.protocol.core.methods.response.EthGetBalance;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
@@ -52,7 +54,7 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -164,7 +166,7 @@ public class UWalletServiceImpl extends ServiceImpl<UWalletMapper, UWalletEntity
         final Dict balance = getBlockChainBalance(Dict.create().set("address", wallet.getAddress()).set("user_id", wallet.getUserId()));
         Dict condition = Dict.create().set("user_id", wallet.getUserId()).set("type", UBalanceConstants.AVAILABLE_ETH_TYPE);
         Dict data = Dict.create().set("balance", balance.getDouble("eth"));
-        uBalanceService.updateFieldBySQL(UBalanceEntity.class, data, condition);
+        uBalanceService.updateFieldByCondition(UBalanceEntity.class, data, condition);
         double newBalance = uBalanceService.reduceBalance(wallet.getUserId(), UBalanceConstants.FROZEN_USDT_TYPE, Convert.fromWei(event.value.toString(), Convert.Unit.MWEI).doubleValue(), Dict.create().set("source", "user_mention_usdt").set("remark", "用户提币USDT"));
         return true;
     }
@@ -250,25 +252,25 @@ public class UWalletServiceImpl extends ServiceImpl<UWalletMapper, UWalletEntity
         final long userId = param.getLong(GXTokenManager.USER_ID);
         String redisKey = StrUtil.format("mention-money:{}", userId);
         synchronized (lock) {
-            if (StrUtil.isNotBlank(redisUtil.get(redisKey))) {
+            if (StrUtil.isNotBlank(GXRedisUtils.get(redisKey, String.class))) {
                 throw new GXException("您有正在转账的操作 , 请稍后重试....");
             }
-            redisUtil.set(redisKey, param.getStr("amount"), 1200);
+            GXRedisUtils.set(redisKey, param.getStr("amount"), 1200, TimeUnit.SECONDS);
         }
         log.info("发起提币请求, 请求参数为 : {}", param.toString());
         final UUserEntity userEntity = uUserService.getById(userId);
         if (!userEntity.getPayPassword().equals(SecureUtil.md5(param.getStr("capital_password") + userEntity.getPaySalt()))) {
-            redisUtil.delete(redisKey);
+            GXRedisUtils.delete(redisKey);
             throw new GXException("资金密码不正确");
         }
         String to = param.getStr("address");
         String amount = param.getStr("amount");
         if (Double.parseDouble(amount) < 20) {
-            redisUtil.delete(redisKey);
+            GXRedisUtils.delete(redisKey);
             throw new GXException("转账金额必须大于20个");
         }
         if (!uBalanceService.enoughBalance(userId, UBalanceConstants.AVAILABLE_USDT_TYPE, Double.parseDouble(amount))) {
-            redisUtil.delete(redisKey);
+            GXRedisUtils.delete(redisKey);
             throw new GXException("提币余额不足!");
         }
         // 如果to是平台内部的地址,则直接转换为平台内部之间的转账
@@ -282,7 +284,7 @@ public class UWalletServiceImpl extends ServiceImpl<UWalletMapper, UWalletEntity
                             .set("from", userId)
                             .set("to", toWalletEntity.getUserId())
                             .set("remark", "提币转换为平台内部之间转账"));
-            redisUtil.delete(redisKey);
+            GXRedisUtils.delete(redisKey);
             return true;
         }
         final Dict transferData = Dict.create()
@@ -305,17 +307,18 @@ public class UWalletServiceImpl extends ServiceImpl<UWalletMapper, UWalletEntity
     public Dict getBlockChainBalance(Dict param) {
         try {
             String address = param.getStr("address");
-            if (null == address && null == param.getLong(GXTokenManager.USER_ID)) {
+            /*if (null == address && null == param.getLong(GXTokenManager.USER_ID)) {
                 throw new GXException("请提供钱包地址或者登录...");
             }
             if (null == address && null != param.getLong(GXTokenManager.USER_ID)) {
                 final UWalletEntity walletEntity = uWalletService.getWalletByUserId(Optional.ofNullable(param.getLong("user_id")).orElse(0L));
                 address = walletEntity.getAddress();
-            }
+            }*/
             final Web3j web3jHttp = Web3j.build(new HttpService(ethConfig.getHttpClientUrl()));
             final TransactionManager transactionManager = new ReadonlyTransactionManager(web3jHttp, ethConfig.getContractAddress());
             final USDTContract contract = USDTContract.load(ethConfig.getContractAddress(), web3jHttp, transactionManager, new DefaultGasProvider());
-            final EthGetBalance ethBalance = web3jHttp.ethGetBalance(address, DefaultBlockParameterName.LATEST).send();
+            Request<?, EthGetBalance> balanceRequest = web3jHttp.ethGetBalance(address, DefaultBlockParameterName.LATEST);
+            EthGetBalance ethBalance = balanceRequest.send();
             final BigInteger tokenBalance;
             tokenBalance = contract.balanceOf(address).send();
             final BigDecimal ethNumber = Convert.fromWei(String.valueOf(ethBalance.getBalance()), Convert.Unit.ETHER);
@@ -351,9 +354,9 @@ public class UWalletServiceImpl extends ServiceImpl<UWalletMapper, UWalletEntity
     }
 
     @Override
+    @Cacheable(value = "wallets-users", key = "#id")
     public UWalletEntity getWalletByUserId(long userId) {
-        final UWalletEntity wallet = getOne(new QueryWrapper<UWalletEntity>().eq("user_id", userId));
-        return wallet;
+        return getOne(new QueryWrapper<UWalletEntity>().eq("user_id", userId));
     }
 
     @Override

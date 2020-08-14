@@ -32,6 +32,7 @@ import org.web3j.tx.TransactionManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -52,11 +53,11 @@ public class SummaryUSDTServiceImpl implements SummaryUSDTService {
     @Override
     @Scheduled(cron = "0 */2 * * * ?")
     public void gather() {
-        if (StrUtil.isNotBlank(redisUtils.get(SummaryUSDTConstants.REDIS_LOCK_KEY))) {
+        if (StrUtil.isNotBlank(GXRedisUtils.get(SummaryUSDTConstants.REDIS_LOCK_KEY, String.class))) {
             log.info("上一次的收币操作还未执行完毕......");
             return;
         }
-        redisUtils.set(SummaryUSDTConstants.REDIS_LOCK_KEY, "gather.usdt", 3600);
+        GXRedisUtils.set(SummaryUSDTConstants.REDIS_LOCK_KEY, "gather.usdt", 3600, TimeUnit.SECONDS);
         log.info("平台开始执行收币...");
         List<UWalletEntity> list = Optional.ofNullable(uWalletService.list(new QueryWrapper<UWalletEntity>()
                 .eq("is_platform", 0)
@@ -81,7 +82,7 @@ public class SummaryUSDTServiceImpl implements SummaryUSDTService {
                 transfer(walletEntity.getUserId(), tokenAmount.toString());
             }
         }
-        if (redisUtils.delete(SummaryUSDTConstants.REDIS_LOCK_KEY)) {
+        if (GXRedisUtils.delete(SummaryUSDTConstants.REDIS_LOCK_KEY)) {
             log.info("平台收账执行完毕......");
         }
     }
@@ -121,7 +122,7 @@ public class SummaryUSDTServiceImpl implements SummaryUSDTService {
         } catch (Exception e) {
             log.error("平台收账执行失败 >>> 平台收币 >>> 以太坊交易发生异常 >>> Exception", e);
         } finally {
-            if (redisUtils.delete(SummaryUSDTConstants.REDIS_LOCK_KEY)) {
+            if (GXRedisUtils.delete(SummaryUSDTConstants.REDIS_LOCK_KEY)) {
                 log.info("平台收账执行完毕遇到异常......");
             }
         }

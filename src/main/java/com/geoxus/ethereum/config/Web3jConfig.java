@@ -34,10 +34,10 @@ public class Web3jConfig {
         final WebSocketClient webSocketClient = new WebSocketClient(new URI(ethConfig.getWebsocketClientUrl()));
         final boolean includeRawResponses = true;
         final WebSocketService webSocketService = new WebSocketService(webSocketClient, includeRawResponses);
-        webSocketService.connect(
+       /* webSocketService.connect(
                 s -> System.out.println("web3jWebsocket onMessage callback : " + s),
                 t -> System.out.println("web3jWebsocket onError callback : " + t),
-                () -> System.out.println("web3jWebsocket onClose callback "));
+                () -> System.out.println("web3jWebsocket onClose callback "));*/
         return Web3j.build(webSocketService);
     }
 

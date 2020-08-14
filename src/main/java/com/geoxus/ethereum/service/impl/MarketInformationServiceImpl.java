@@ -1,5 +1,6 @@
 package com.geoxus.ethereum.service.impl;
 
+import cn.hutool.core.lang.TypeReference;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.json.JSONUtil;
 import com.geoxus.ethereum.service.MarketInformationService;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -24,12 +26,12 @@ public class MarketInformationServiceImpl implements MarketInformationService {
         final List<Map<String, Object>> retData = new ArrayList<>();
         try {
             final String s = new String(bytes, StandardCharsets.UTF_8);
-            final List<Map<String, Object>> lists = JSONUtil.toBean(s, List.class);
+            final List<Map<String, Object>> lists = JSONUtil.toBean(s, new TypeReference<List<Map<String, Object>>>() {
+            }, false);
             for (int i = 0; i < params.size(); i++) {
                 for (Map<String, Object> map : lists) {
                     if (map.get("currency").equals(params.get(0))) {
                         retData.add(map);
-                        continue;
                     }
                 }
             }
@@ -37,6 +39,6 @@ public class MarketInformationServiceImpl implements MarketInformationService {
         } catch (Exception e) {
             log.error(e.getMessage(), e);
         }
-        return null;
+        return Collections.emptyList();
     }
 }
